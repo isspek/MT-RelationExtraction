@@ -1,0 +1,18 @@
+python -m main \
+--dataset=gids \
+--labels=100.0 \
+--arch=lstm_RE \
+--train-subdir=train_fullyLex \
+--eval-subdir=dev_fullyLex \
+--epochs=200 \
+--labeled-batch-size=64 \
+--random-seed=366 \
+--consistency=1 \
+--consistency-rampup=5 \
+--word-frequency=5 \
+--print-freq=2 \
+--pretrained-wordemb=True \
+--wordemb-size=100 \
+--random-initial-unkown=True \
+--update-pretrained-wordemb=True \
+--run-name log_gids_labels100.0_epochs200_labeled64_cons1_ramp5_pre_update_rand366_wf5_fullyLex

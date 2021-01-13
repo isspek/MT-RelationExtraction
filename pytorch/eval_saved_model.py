@@ -204,7 +204,7 @@ def validate(eval_loader, model, pr_log, dataset, model_type):
                 seq_lengths = torch.LongTensor([x for x in lengths])
 
         if torch.cuda.is_available():
-            target_var = torch.autograd.Variable(target.cuda(async=True), volatile=True)
+            target_var = torch.autograd.Variable(target.cuda(), volatile=True)
         else:
             target_var = torch.autograd.Variable(target.cpu(), volatile=True) ## NOTE: AJAY - volatile: Boolean indicating that the Variable should be used in inference mode,
 
@@ -355,9 +355,9 @@ def prec_rec(output, target, NA_label, topk=(1,)):
     tp_fn = tp_fn_idx.sum()  # number of target labels which are not NA and not NONE (number of non NA labels in ONLY supervised portion of target)
 
     # index() takes same size of pred with idx value 0 and 1, and only return pred[idx] where idx is 1
-    tp_fp = pred.index(tp_fn_2).ne(NA_label).sum()  # number of non NA labels in pred where target labels are not NONE  (Note: corresponded target labels can be NA)
+    tp_fp = pred[tp_fn_2].ne(NA_label).sum()  # number of non NA labels in pred where target labels are not NONE  (Note: corresponded target labels can be NA)
 
-    tp = pred.index(tp_fn_idx).eq(target.view(1, -1).index(tp_fn_idx)).sum()  # number of matches where target labels are not NA and not NONE
+    tp = pred[tp_fn_idx].eq(target.view(1, -1)[tp_fn_idx]).sum()  # number of matches where target labels are not NA and not NONE
 
     return tp, tp_fn, tp_fp
 

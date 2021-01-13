@@ -348,7 +348,7 @@ class REDataset(Dataset):
 
     def __init__(self, dir, args, transform=None):
 
-        w2vfile = dir + "/../../" + args.pretrained_wordemb_file
+        w2vfile = dir + "/glove.6B/" + args.pretrained_wordemb_file #todo change this, this could lead bugs
 
         self.args = args
         self.max_entity_len = args.max_entity_len  # 8

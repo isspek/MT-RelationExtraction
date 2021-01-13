@@ -528,7 +528,7 @@ def train(train_loader, model, ema_model, optimizer, epoch, dataset, log):
                 ema_input_var = torch.autograd.Variable(ema_input, volatile=True).cpu()
 
         if torch.cuda.is_available():
-            target_var = torch.autograd.Variable(target.cuda(async=True))
+            target_var = torch.autograd.Variable(target.cuda())
         else:
             target_var = torch.autograd.Variable(target.cpu())  # todo: not passing the async=True (as above) .. going along with it now .. to check if this is a problem
 
@@ -590,29 +590,30 @@ def train(train_loader, model, ema_model, optimizer, epoch, dataset, log):
         if args.logit_distance_cost >= 0:
             class_logit, cons_logit = logit1, logit2
             res_loss = args.logit_distance_cost * residual_logit_criterion(class_logit, cons_logit) / minibatch_size
-            meters.update('res_loss', res_loss.data[0])
+            meters.update('res_loss', res_loss.item())
         else:                                 # this is the default
             class_logit, cons_logit = logit1, logit1    # class_logit.data.size(): torch.Size([256, 56])
             res_loss = 0
 
         class_loss = class_criterion(class_logit, target_var) / minibatch_size  ## DONE: AJAY - WHAT IF target_var NOT PRESENT (UNLABELED DATAPOINT) ? Ans: See  ignore index in  `class_criterion = nn.CrossEntropyLoss(size_average=False, ignore_index=NO_LABEL).cpu()`
-        meters.update('class_loss', class_loss.data[0])
+        meters.update('class_loss', class_loss.item())
 
         ema_class_loss = class_criterion(ema_logit, target_var) / minibatch_size ## DONE: AJAY - WHAT IF target_var NOT PRESENT (UNLABELED DATAPOINT) ? Ans: See  ignore index in  `class_criterion = nn.CrossEntropyLoss(size_average=False, ignore_index=NO_LABEL).cpu()`
-        meters.update('ema_class_loss', ema_class_loss.data[0])    # Do we need this?
+        meters.update('ema_class_loss', ema_class_loss.item())    # Do we need this?
 
         if args.consistency:     # if pass --consistency in running script
             consistency_weight = get_current_consistency_weight(epoch)
             meters.update('cons_weight', consistency_weight)
             consistency_loss = consistency_weight * consistency_criterion(cons_logit, ema_logit) / minibatch_size
-            meters.update('cons_loss', consistency_loss.data[0])
+            meters.update('cons_loss', consistency_loss.item())
         else:
             consistency_loss = 0
             meters.update('cons_loss', 0)
 
         loss = class_loss + consistency_loss + res_loss # NOTE: AJAY - loss is a combination of classification loss and consistency loss (+ residual loss from the 2 outputs of student model fc1 and fc2, see args.logit_distance_cost)
-        assert not (np.isnan(loss.data[0]) or loss.data[0] > 1e5), 'Loss explosion: {}'.format(loss.data[0])
-        meters.update('loss', loss.data[0])
+        loss_item = loss.item()
+        assert not (np.isnan(loss_item) or loss_item > 1e5), 'Loss explosion: {}'.format(loss_item)
+        meters.update('loss', loss_item)
 
         if args.dataset in ['riedel', 'gids']:
             #student
@@ -851,7 +852,7 @@ def validate(eval_loader, model, log, global_step, epoch, dataset, result_dir, m
                 input_var = torch.autograd.Variable(input, volatile=True).cpu() ## NOTE: AJAY - volatile: Boolean indicating that the Variable should be used in inference mode,
 
         if torch.cuda.is_available():
-            target_var = torch.autograd.Variable(target.cuda(async=True), volatile=True)
+            target_var = torch.autograd.Variable(target.cuda(), volatile=True)
         else:
             target_var = torch.autograd.Variable(target.cpu(), volatile=True) ## NOTE: AJAY - volatile: Boolean indicating that the Variable should be used in inference mode,
 
@@ -930,7 +931,7 @@ def validate(eval_loader, model, log, global_step, epoch, dataset, result_dir, m
             else:
                 accum_f1_test = 2 * accum_prec_test * accum_rec_test / (accum_prec_test + accum_rec_test)
 
-            meters.update('class_loss', class_loss.data[0], labeled_minibatch_size)
+            meters.update('class_loss', class_loss.data.item(), labeled_minibatch_size)
 
             # if epoch == args.epochs:
             #     dump_result(i, args, output1.data, target_var.data, dataset, perm_idx_test, 'test_'+model_type, topk=(1,))
@@ -938,11 +939,13 @@ def validate(eval_loader, model, log, global_step, epoch, dataset, result_dir, m
         else:
             # measure accuracy and record loss
             prec1, prec5 = accuracy(output1.data, target_var.data, topk=(1, 2)) #Note: Ajay changing this to 2 .. since there are only 4 labels in CoNLL dataset
-            meters.update('class_loss', class_loss.data[0], labeled_minibatch_size)
-            meters.update('top1', prec1[0], labeled_minibatch_size)
-            meters.update('error1', 100.0 - prec1[0], labeled_minibatch_size)
-            meters.update('top5', prec5[0], labeled_minibatch_size)
-            meters.update('error5', 100.0 - prec5[0], labeled_minibatch_size)
+            meters.update('class_loss', class_loss.data.item(), labeled_minibatch_size)
+            prec1 = prec1.data.item()
+            prec5 = prec5.data.item()
+            meters.update('top1', prec1, labeled_minibatch_size)
+            meters.update('error1', 100.0 - prec1, labeled_minibatch_size)
+            meters.update('top5', prec5, labeled_minibatch_size)
+            meters.update('error5', 100.0 - prec5, labeled_minibatch_size)
 
         # measure elapsed time
         meters.update('batch_time', time.time() - end)
@@ -1172,9 +1175,9 @@ def prec_rec(output, target, NA_label, topk=(1,)):
     tp_fn = tp_fn_idx.sum()  # number of target labels which are not NA and not NONE (number of non NA labels in ONLY supervised portion of target)
 
     # index() takes same size of pred with idx value 0 and 1, and only return pred[idx] where idx is 1
-    tp_fp = pred.index(tp_fn_2).ne(NA_label).sum()  # number of non NA labels in pred where target labels are not NONE  (Note: corresponded target labels can be NA)
+    tp_fp = pred[tp_fn_2.unsqueeze(dim=0)].ne(NA_label).sum()  # number of non NA labels in pred where target labels are not NONE  (Note: corresponded target labels can be NA)
 
-    tp = pred.index(tp_fn_idx).eq(target.view(1, -1).index(tp_fn_idx)).sum()  # number of matches where target labels are not NA and not NONE
+    tp = pred[tp_fn_idx.unsqueeze(dim=0)].eq(target.view(1, -1)[tp_fn_idx.unsqueeze(dim=0)]).sum()  # number of matches where target labels are not NA and not NONE
 
     return tp, tp_fn, tp_fp
 
